@@ -10,11 +10,36 @@ from youtube_transcript_api._errors import (
     IpBlocked,
     CouldNotRetrieveTranscript,
 )
+from youtube_transcript_api.proxies import WebshareProxyConfig
+
+
+def get_api() -> YouTubeTranscriptApi:
+    """Build the API client, routing through a Webshare proxy if credentials
+    are configured in Streamlit secrets. Falls back to a direct connection
+    (fine for local runs) if no secrets are set."""
+    try:
+        username = st.secrets["WEBSHARE_USERNAME"]
+        password = st.secrets["WEBSHARE_PASSWORD"]
+    except (KeyError, FileNotFoundError):
+        return YouTubeTranscriptApi()
+
+    return YouTubeTranscriptApi(
+        proxy_config=WebshareProxyConfig(
+            proxy_username=username,
+            proxy_password=password,
+        )
+    )
 
 st.set_page_config(page_title="YouTube Transcript Extractor", page_icon="📝", layout="centered")
 
 st.title("📝 YouTube Transcript Extractor")
 st.caption("Paste a YouTube link, get the full transcript — free, no API key needed.")
+
+try:
+    _ = st.secrets["WEBSHARE_USERNAME"]
+    st.caption("🟢 Proxy configured — routing requests through Webshare.")
+except (KeyError, FileNotFoundError):
+    st.caption("🟡 No proxy configured — using a direct connection (fine for local runs).")
 
 
 def extract_video_id(text: str) -> str | None:
@@ -64,7 +89,7 @@ if fetch_clicked:
         else:
             with st.spinner("Fetching transcript..."):
                 try:
-                    api = YouTubeTranscriptApi()
+                    api = get_api()
                     transcript_list = api.list(video_id)
 
                     # Pick transcript: preferred language if given, else any available
